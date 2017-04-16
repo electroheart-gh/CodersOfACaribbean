@@ -62,10 +62,10 @@ class Entity:
 
     def cube(self):
         """Returns coordinates by Cube system converted from Offset system for simpler algorithm. """
-        cube_x = self.y - (self.x - (self.x % 2)) / 2
-        cube_z = self.x
-        cube_y = -cube_x - cube_z
-        return cube_x, cube_y, cube_z
+        cube_x = int(self.x - (self.y - (self.y % 2)) / 2)
+        cube_z = int(self.y)
+        cube_y = int(-cube_x - cube_z)
+        return Cube((cube_x, cube_y, cube_z))
 
 
 class Entities(list):
@@ -80,7 +80,7 @@ class Entities(list):
 
     def closest_to(self, entity):
         if len(self):
-            return min(self, key=methodcaller("distance_to", entity))  # type: Entity
+            return min(self, key=methodcaller("distance_to", entity))
         else:
             return None
 
@@ -93,7 +93,6 @@ class Ship(Entity):
         self.rum = int(rum)
         self.owner = int(owner)
 
-        # try, catch
         ent = entities_in_history.last(self.entity_id)
         if ent is None:
             self.turns_to_fire = 0
@@ -101,6 +100,11 @@ class Ship(Entity):
         else:
             self.turns_to_fire = max(0, ent.turns_to_fire - 1)
             self.turns_to_mine = max(0, ent.turns_to_mine - 1)
+
+        DT.stderr("speed {0}".format(self.speed))
+
+    def next_location(self):
+        return self.cube() + Cube().neighbor(self.orientation) * self.speed  # type:Cube
 
 
 class Ships(Entities):
@@ -160,8 +164,8 @@ DT = DebugTool()
 #######################################
 # Global Variables for Game
 #######################################
-turns_to_fire = 1
-turns_to_mine = 4
+turns_to_fire = 2
+turns_to_mine = 5
 
 #######################################
 # Parameters to be adjusted
@@ -174,6 +178,32 @@ distance_to_fire = 4
 
 entities_in_history = History()
 
+
+class Cube(tuple):
+    def __new__(cls, value=(0, 0, 0)):
+        return super().__new__(cls, value)
+
+    def __add__(self, cube):
+        return Cube(m + n for m, n in zip(self, cube))
+
+    def __neg__(self):
+        return Cube([-n for n in self])
+
+    def __sub__(self, cube):
+        return self.__add__(-cube)
+
+    def __mul__(self, n):
+        return Cube([m * n for m in self])
+
+    def neighbor(self, orientation):
+        neighbors = ((+1, -1, 0), (+1, 0, -1), (0, +1, -1),
+                     (-1, +1, 0), (-1, 0, +1), (0, -1, +1))
+        return self + Cube(neighbors[orientation])
+
+    def offset(self):
+        return int(self[0] + (self[2] - self[2] % 2) / 2), self[2]
+
+
 while True:
     # Initialize for turn
     ships = Ships()
@@ -182,8 +212,8 @@ while True:
     mines = Mines()
 
     # Input for turn
-    my_ship_count = int(input())  # the number of remaining ships
-    entity_count = int(input())  # the number of entities (e.g. ships, mines or cannonballs)
+    my_ship_count = int(DT.input())  # the number of remaining ships
+    entity_count = int(DT.input())  # the number of entities (e.g. ships, mines or cannonballs)
     for i in range(entity_count):
         entity_id, entity_type, x, y, arg_1, arg_2, arg_3, arg_4 = DT.input().split()
         if entity_type == "SHIP":
@@ -196,21 +226,31 @@ while True:
             mines.append(Mine(entity_id, x, y))
 
     # Command for my ships
-    for s in ships.ally():
-        # Fire to enemy ship
-        target = ships.enemy().closest_to(s)
-        if target.distance_to(s) <= distance_to_fire and s.turns_to_fire == 0:
-            command = "FIRE {0} {1}".format(target.x, target.y)
+    for self in ships.ally():  # type: Ship
+        # Dodge a mine or a cannonball
+
+        # Check location of next turn
+        next_location = self.next_location()
+        # Then check following location after the next with WAIT, PORT and STARBOARD move.
+        #   if it touches a mine or a cannonball and damage.
+        # If wrong, try PORT and STARBOARD move.
+        # If everything wrong, select move which takes the least damage.
+
+        # Fire to an enemy ship
+        target_ship = ships.enemy().closest_to(self)  # type: Ship
+        if target_ship.distance_to(self) <= distance_to_fire and self.turns_to_fire == 0:
+            target_cube = target_ship.next_location()  # type: Cube
+            command = "FIRE {0} {1}".format(*(target_cube.offset()))
             print(command)
-            s.turns_to_fire = turns_to_fire
-        # Move to barrel
+            self.turns_to_fire = turns_to_fire
+        # Get a barrel
         else:
-            barrel = barrels.closest_to(s)
+            barrel = barrels.closest_to(self)  # type: Barrel
             if barrel is not None:
                 command = "MOVE {0} {1}".format(barrel.x, barrel.y)
                 print(command)
             else:
-                command = "MOVE {0} {1}".format(target.x, target.y)
+                command = "MOVE {0} {1}".format(target_ship.x, target_ship.y)
                 print(command)
 
     entities_in_history.append(ships + barrels + mines)
