@@ -1,0 +1,19 @@
+### PLAN ###
+# In case of no barrel left, choice move to the enemy or against the enemy by comparing the rum left of ships
+
+# Fire cannonballs with prediction of the movement of enemy ship
+  Consider the turns to impact
+
+
+# Place mines  with prediction of the movement of enemy ship
+
+
+
+### DONE ###
+# Dodge cannonballs
+# Dodge mines
+# Fire cannonballs with SIMPLE prediction of the movement of enemy ship
+
+# Ships seem to be frozen
+  move command is issued properly
+  maybe need manual control
