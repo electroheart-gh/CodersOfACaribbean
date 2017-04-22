@@ -1,14 +1,24 @@
 ### PLAN ###
-# prioritize speed higher
+# Prioritize WAIT less
 
 # In case of no barrel left, choice move to the enemy or against the enemy by comparing the rum left of ships
+
+# Coordinate three ships
+
+# Make strategy to trap enemy ships
 
 # Fire cannonballs with prediction of the movement of enemy ship
   Consider the turns to impact
 
+# prioritize speed higher
+
 
 # Place mines  with prediction of the movement of enemy ship
 
+# Resolve stacking at the edge or corner
+  Need to implement the process for the edge, which are speed and location in prediction method
+
+# Change priority by the rum left of the ship
 
 
 ### DONE ###

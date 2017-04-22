@@ -1,9 +1,6 @@
 import sys
-import math
 import time
 from inspect import currentframe
-from operator import methodcaller
-from operator import attrgetter
 
 
 class DebugTool:
@@ -94,30 +91,32 @@ class Ship(Entity):
         if ent is None:
             self.turns_to_fire = 0
             self.turns_to_mine = 0
+            self.turns_halted = 0
         else:
             self.turns_to_fire = max(0, ent.turns_to_fire - 1)
             self.turns_to_mine = max(0, ent.turns_to_mine - 1)
+            self.turns_halted = ent.turns_halted
 
     def next_location(self):
         return self.cube().neighbor(self.orientation, self.speed)  # type:Cube
 
     def predict_command(self, command):
-        """Call 'predict' by 'command' and return the value  with the 'command'."""
+        """Call 'predict' by 'command' and return the value  with the 'command' value."""
 
         if command == "WAIT":
-            return self.predict(0, 0) + (command,)
+            return self.predict(0, 0) + (1, command)
 
         elif command == "PORT":
-            return self.predict(1, 0) + (command,)
+            return self.predict(1, 0) + (10, command)
 
         elif command == "STARBOARD":
-            return self.predict(-1, 0) + (command,)
+            return self.predict(-1, 0) + (10, command)
 
         elif command == "FASTER":
-            return self.predict(0, 1) + (command,)
+            return self.predict(0, 1) + (100, command)
 
         elif command == "SLOWER":
-            return self.predict(0, -1) + (command,)
+            return self.predict(0, -1) + (0, command)
 
     def predict(self, turning, speed):
         """Return a tuple of values predicted for the next two turns with specified controlling values.
@@ -137,45 +136,74 @@ class Ship(Entity):
 
         # rum -- increase/decrease of rum
         # 1st turn
+        current_location = self.cube()
+        current_orientation = self.orientation
+        current_speed = self.speed
+
         # Decrease rum
         rum = -1
-        # Change Speed but keep orientation
-        current_speed = min(2, max(0, self.speed + speed))
-        current_orientation = self.orientation
-        # Move Forward
-        current_location = self.cube().neighbor(current_orientation, current_speed)  # type: Cube
-        ship_occupation_set = set(self.ship_occupation(current_location, current_orientation))
+
+        # Change speed
+        current_speed = min(2, max(0, current_speed + speed))
+        # Move Forward with collision check
+        temp_location = current_location.neighbor(current_orientation, current_speed)  # type: Cube
+        x, y = temp_location.offset()
+        if 0 <= x <= MAP_WIDTH and 0 <= y <= MAP_HEIGHT:
+            current_location = temp_location
+        else:
+            if current_speed == 2:
+                temp_location = self.cube().neighbor(current_orientation, 1)  # type: Cube
+                if 0 <= x <= MAP_WIDTH and 0 <= y <= MAP_HEIGHT:
+                    current_location = temp_location
+            current_speed = 0
+        current_ship_occupation = self.ship_occupation(current_location, current_orientation)
+        # Initialize record of ship_occupation
+        ship_occupation_set = set(current_ship_occupation)
         # Turn Ship
         current_orientation = (self.orientation + turning) % 6
         current_ship_occupation = self.ship_occupation(current_location, current_orientation)
+        # Record additional ship_occupation
+        ship_occupation_set |= set(current_ship_occupation)
         # Check impact of a cannonball
         # todo: Check explosion of mines by cannonballs
         rum -= cannonballs.impact_at(current_ship_occupation, 1)
-        # Record ship's occupation
-        ship_occupation_set |= set(current_ship_occupation)
 
         # 2nd turn
         # Decrease rum
         rum -= 1
-        # Move forward without changing speed and turning ship
-        current_location = current_location.neighbor(current_orientation, current_speed)  # type: Cube
+        # Move forward with collision check (No change of speed and orientation)
+        temp_location = current_location.neighbor(current_orientation, current_speed)  # type: Cube
+        x, y = temp_location.offset()
+        if 0 <= x <= MAP_WIDTH and 0 <= y <= MAP_HEIGHT:
+            current_location = temp_location
+        else:
+            if current_speed == 2:
+                temp_location = self.cube().neighbor(current_orientation, 1)  # type: Cube
+                if 0 <= x <= MAP_WIDTH and 0 <= y <= MAP_HEIGHT:
+                    current_location = temp_location
+            current_speed = 0
         current_ship_occupation = self.ship_occupation(current_location, current_orientation)
+        # Record additional ship_occupation
+        ship_occupation_set |= set(current_ship_occupation)
         # Check impact of a cannonball
         # todo: Check explosion of mines by cannonballs
         rum -= cannonballs.impact_at(current_ship_occupation, 2)
-        # Record ship's occupation
-        ship_occupation_set |= set(current_ship_occupation)
-        # Check touching a mine
-        # Check getting a barrel
+        # Check touching a mine and getting a barrel with ship_occupation_set
         for loc in ship_occupation_set:
             rum += barrels.rum_at(loc)
             rum -= mines.exist_at(loc)
 
         # closeness_barrel -- negative value of distance from the closest barrel
+        bow = current_location.neighbor(current_orientation)
         if barrels is None or len(barrels) == 0:
             closeness_barrel = - NOT_FOUND
         else:
-            closeness_barrel = -barrels.closest_to(current_location).distance_to(current_location)
+            closeness_barrel = -barrels.closest_to(bow).distance_to(bow)
+
+        if barrels is None or len(barrels) == 0:
+            closeness_barrel = closeness_barrel, - NOT_FOUND
+        else:
+            closeness_barrel = closeness_barrel, -barrels.closest_to(current_location).distance_to(current_location)
 
         # remoteness_mine -- distance from the closest mine
         if mines is None or len(mines) == 0:
@@ -187,8 +215,6 @@ class Ship(Entity):
 
         # remoteness_edge -- distance from the edge of map
         bow = current_location.neighbor(current_orientation).offset()
-        DT.stderr("bow", bow)
-        DT.stderr(bow[0], MAP_WIDTH - bow[0], bow[1], MAP_HEIGHT - bow[1])
         remoteness_edge = min(bow[0], MAP_WIDTH - bow[0], bow[1], MAP_HEIGHT - bow[1])
         if remoteness_edge > DISTANCE_TO_CHECK_EDGE:
             remoteness_edge = NOT_FOUND
@@ -291,7 +317,7 @@ class History(list):
         if len(self) != 0:
             for ent in self[turns]:
                 if ent.entity_id == entity_id:
-                    return ent
+                    return ent  # type: Entity
 
 
 #######################################
@@ -381,10 +407,19 @@ while True:
         else:
             # Compare value of each action Wt, Pt, St, Sl, Ft
             # value = (more rum, closer to barrel, further from mine/map edge, more speed, command)
+            if s.speed == 0:
+                s.turns_halted += 1
+            else:
+                s.turns_halted = 0
+
             values = [s.predict_command(com) for com in STEERING_COMMAND]
-            # Choose the action with highest value
             DT.stderr(values)
-            command = max(values)[-1]
+            # If halted for a while, move forcibly
+            if s.turns_halted > 3 and values[3][0] >= -2:
+                command = "FASTER"
+            else:
+                # Choose the action with highest value
+                command = max(values)[-1]
 
             # Enable to fire(mine) if WAIT does not lost rum by mine or cannonball
             if values[0][0] >= -2:
