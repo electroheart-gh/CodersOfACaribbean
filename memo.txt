@@ -1,4 +1,6 @@
 ### PLAN ###
+# prioritize speed higher
+
 # In case of no barrel left, choice move to the enemy or against the enemy by comparing the rum left of ships
 
 # Fire cannonballs with prediction of the movement of enemy ship

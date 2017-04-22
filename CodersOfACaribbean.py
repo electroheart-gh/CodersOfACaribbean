@@ -54,14 +54,6 @@ class Entity:
 
     def distance_to(self, entity_or_cubegrid):
         """Return distance to the entity using cube coordinate system."""
-        # return (entity.x - self.x) ** 2 + (entity.y - self.y) ** 2
-        # x0, y0, z0 = self.cube()
-        # x1, y1, z1 = entity.cube()
-        # return max(abs(x1 - x0), abs(y1 - y0), abs(z1 - z0))
-
-        # if type(entity) == Ship:
-        #     bow = entity.cube().neighbor(entity.orientation)  # type:Cube
-        #     return max(abs(ax[0] - ax[1]) for ax in zip(bow, self.cube()))
         if isinstance(entity_or_cubegrid, Entity):
             cubegrid = entity_or_cubegrid.cube()
         else:
@@ -150,37 +142,29 @@ class Ship(Entity):
         # Change Speed but keep orientation
         current_speed = min(2, max(0, self.speed + speed))
         current_orientation = self.orientation
-
         # Move Forward
         current_location = self.cube().neighbor(current_orientation, current_speed)  # type: Cube
         ship_occupation_set = set(self.ship_occupation(current_location, current_orientation))
-
         # Turn Ship
         current_orientation = (self.orientation + turning) % 6
         current_ship_occupation = self.ship_occupation(current_location, current_orientation)
-
         # Check impact of a cannonball
         # todo: Check explosion of mines by cannonballs
         rum -= cannonballs.impact_at(current_ship_occupation, 1)
-
         # Record ship's occupation
         ship_occupation_set |= set(current_ship_occupation)
 
         # 2nd turn
         # Decrease rum
         rum -= 1
-
         # Move forward without changing speed and turning ship
         current_location = current_location.neighbor(current_orientation, current_speed)  # type: Cube
         current_ship_occupation = self.ship_occupation(current_location, current_orientation)
-
         # Check impact of a cannonball
         # todo: Check explosion of mines by cannonballs
         rum -= cannonballs.impact_at(current_ship_occupation, 2)
-
         # Record ship's occupation
         ship_occupation_set |= set(current_ship_occupation)
-
         # Check touching a mine
         # Check getting a barrel
         for loc in ship_occupation_set:
@@ -220,16 +204,6 @@ class Ship(Entity):
 class Ships(Entities):
     pass
 
-    # implement append(), extend() and insert() to add instance of Ship only
-    # def append(self, p_object):
-    #     if type(p_object) == Ship:
-    #         super().append(p_object)
-    #     else:
-    #         raise TypeError
-    #
-    # def add(self, entity_id, x, y, orientation, speed, rum, owner):
-    #     self.append(Ship(entity_id, x, y, orientation, speed, rum, owner))
-
 
 class Barrel(Entity):
     def __init__(self, entity_id, x, y, rum):
@@ -242,7 +216,6 @@ class Barrels(Entities):
         for barrel in self:  # type: Barrel
             if barrel.cube() == cube_location:
                 return barrel.rum
-
         return 0
 
 
@@ -285,7 +258,6 @@ class Mines(Entities):
         for mine in self:  # type: Mine
             if mine.cube() == cube_location:
                 return MINE_HIGH_DAMAGE
-
         return 0
 
 
@@ -414,7 +386,7 @@ while True:
             DT.stderr(values)
             command = max(values)[-1]
 
-            # Able to fire(mine) if WAIT does not lost rum by mine or cannonball
+            # Enable to fire(mine) if WAIT does not lost rum by mine or cannonball
             if values[0][0] >= -2:
                 # ToDo: refine conditions to fire
                 target_ship = ships.enemy().closest_to(s)  # type: Ship
@@ -423,8 +395,6 @@ while True:
                     target_cube = target_ship.next_location()  # type: Cube
                     command = "FIRE {0} {1}".format(*(target_cube.offset()))
                     s.turns_to_fire = COOLDOWN_CANNON
-        # else:
-        #     command = "WAIT"
 
         # Execute the command
         print(command)
