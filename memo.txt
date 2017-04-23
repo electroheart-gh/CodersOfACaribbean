@@ -1,7 +1,4 @@
 ### PLAN ###
-# Prioritize WAIT less
-
-# In case of no barrel left, choice move to the enemy or against the enemy by comparing the rum left of ships
 
 # Coordinate three ships
 
@@ -15,13 +12,17 @@
 
 # Place mines  with prediction of the movement of enemy ship
 
-# Resolve stacking at the edge or corner
+# Resolve stuck at the edge or corner
   Need to implement the process for the edge, which are speed and location in prediction method
 
 # Change priority by the rum left of the ship
 
 
 ### DONE ###
+# In case of no barrel left, choice move to the enemy or against the enemy by comparing the rum left of ships
+
+# Prioritize WAIT less
+
 # Dodge cannonballs
 # Dodge mines
 # Fire cannonballs with SIMPLE prediction of the movement of enemy ship

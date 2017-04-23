@@ -70,13 +70,15 @@ class Entities(list):
         super().__init__(entity_list)
 
     def ally(self):
-        return Entities([e for e in self if e.owner == 1])  # type: Entities
+        class_name = type(self)
+        return class_name([e for e in self if e.owner == 1])  # type: class_name
 
     def enemy(self):
-        return Entities([e for e in self if e.owner != 1])  # type: Entities
+        class_name = type(self)
+        return class_name([e for e in self if e.owner != 1])  # type: class_name
 
     def closest_to(self, entity_or_cubegrid):
-        return min(self, key=lambda x: x.distance_to(entity_or_cubegrid))
+        return min(self, key=lambda x: x.distance_to(entity_or_cubegrid))  # type: type(self)
 
 
 class Ship(Entity):
@@ -128,12 +130,25 @@ class Ship(Entity):
           speed -- specify 1 to speed up, -1 to speed down.
 
         The return values are:
+          <Damage Control>
           rum -- increase/decrease of rum
-          closeness_barrel -- negative value of distance from the closest barrel
-          remoteness_mine -- distance from the closest mine (check only if so close)
-          remoteness_edge -- distance from the edge of map (check only if so close)
-          speed of the ship -- speed after the second turn"""
 
+          <Targeting>
+          closeness_barrel -- negative value of distance from the closest barrel
+          closeness_toughest_enemy -- negative value of distance from the toughest enemy, if NO_BARREL_ACTION true
+
+          <Avoiding>
+          remoteness_edge -- distance from the edge of map (Check only if so close to the dislikes)
+          remoteness_mine -- distance from the closest mine (Check only if so close to the dislikes)
+          remoteness_enemy -- distance from the closest enemy ship, if NO_BARREL_ACTION true
+
+          <Mobility Control>
+          speed of the ship -- speed after the second turn
+
+          If NO_BARREL_ACTION is true, change the priority after no barrels left in the map so as to
+          rush the toughest enemy or run away from enemies according to quantity of rum left on ships."""
+
+        # <Damage Control>
         # rum -- increase/decrease of rum
         # 1st turn
         current_location = self.cube()
@@ -193,17 +208,31 @@ class Ship(Entity):
             rum += barrels.rum_at(loc)
             rum -= mines.exist_at(loc)
 
+        # <Targeting>
         # closeness_barrel -- negative value of distance from the closest barrel
         bow = current_location.neighbor(current_orientation)
         if barrels is None or len(barrels) == 0:
             closeness_barrel = - NOT_FOUND
+            # closeness_barrel = closeness_barrel, - NOT_FOUND
         else:
             closeness_barrel = -barrels.closest_to(bow).distance_to(bow)
+            # closeness_barrel = closeness_barrel, -barrels.closest_to(current_location).distance_to(current_location)
 
-        if barrels is None or len(barrels) == 0:
-            closeness_barrel = closeness_barrel, - NOT_FOUND
+        # closeness_toughest_enemy -- negative value of distance from the toughest enemy
+        if NO_BARREL_ACTION and ships.toughest().owner == 1:
+            closeness_toughest_enemy = -NOT_FOUND
+            # closeness_toughest_enemy = closeness_toughest_enemy, -NOT_FOUND
         else:
-            closeness_barrel = closeness_barrel, -barrels.closest_to(current_location).distance_to(current_location)
+            closeness_toughest_enemy = -ships.enemy().toughest().distance_to(bow)
+            # closeness_toughest_enemy = closeness_toughest_enemy, \
+            #    -ships.enemy().toughest().distance_to(current_location)
+
+        # <Avoiding>
+        # remoteness_edge -- distance from the edge of map
+        bow = current_location.neighbor(current_orientation).offset()
+        remoteness_edge = min(bow[0], MAP_WIDTH - bow[0], bow[1], MAP_HEIGHT - bow[1])
+        if remoteness_edge > DISTANCE_TO_CHECK_EDGE:
+            remoteness_edge = NOT_FOUND
 
         # remoteness_mine -- distance from the closest mine
         if mines is None or len(mines) == 0:
@@ -213,14 +242,15 @@ class Ship(Entity):
         if remoteness_mine > DISTANCE_TO_CHECK_MINE:
             remoteness_mine = NOT_FOUND
 
-        # remoteness_edge -- distance from the edge of map
-        bow = current_location.neighbor(current_orientation).offset()
-        remoteness_edge = min(bow[0], MAP_WIDTH - bow[0], bow[1], MAP_HEIGHT - bow[1])
-        if remoteness_edge > DISTANCE_TO_CHECK_EDGE:
-            remoteness_edge = NOT_FOUND
+        # remoteness_enemy -- distance from the closest enemy ship
+        if NO_BARREL_ACTION and ships.toughest().owner == 1:
+            remoteness_enemy = ships.enemy().closest_to(current_location).distance_to(current_location)
+        else:
+            remoteness_enemy = NOT_FOUND
 
         # return result of evaluation
-        return rum, closeness_barrel, remoteness_mine, remoteness_edge, current_speed
+        return rum, (closeness_barrel, closeness_toughest_enemy), (
+            remoteness_edge, remoteness_mine, remoteness_enemy), current_speed
 
     @staticmethod
     def ship_occupation(location, orientation):
@@ -228,7 +258,8 @@ class Ship(Entity):
 
 
 class Ships(Entities):
-    pass
+    def toughest(self):
+        return max(self, key=lambda x: x.rum)
 
 
 class Barrel(Entity):
@@ -346,6 +377,8 @@ DISTANCE_TO_FIRE = 4
 DISTANCE_TO_CHECK_MINE = 4
 DISTANCE_TO_CHECK_EDGE = 4
 AUTO_MOVE = False
+FORCE_FASTER = True
+NO_BARREL_ACTION = True
 # MANUAL_MOVE = True
 
 #######################################
@@ -414,14 +447,14 @@ while True:
 
             values = [s.predict_command(com) for com in STEERING_COMMAND]
             DT.stderr(values)
-            # If halted for a while, move forcibly
-            if s.turns_halted > 3 and values[3][0] >= -2:
+            # If halted for a while and no damage, move forcibly
+            if FORCE_FASTER and s.turns_halted > 3 and values[3][0] >= -2:
                 command = "FASTER"
             else:
-                # Choose the action with highest value
+                # Otherwise, choose the action with highest value
                 command = max(values)[-1]
 
-            # Enable to fire(mine) if WAIT does not lost rum by mine or cannonball
+            # If WAIT does not lost rum by mine or cannonball, enable to fire(mine)
             if values[0][0] >= -2:
                 # ToDo: refine conditions to fire
                 target_ship = ships.enemy().closest_to(s)  # type: Ship
